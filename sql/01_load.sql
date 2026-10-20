@@ -9,10 +9,4 @@ CREATE TABLE ab_data (
   converted    SMALLINT
 );
 
-CREATE TABLE countries (
-  user_id INTEGER PRIMARY KEY,
-  country TEXT
-);
-
-\copy ab_data   FROM 'data/ab_data.csv'   WITH (FORMAT csv, HEADER true);
-\copy countries FROM 'data/countries.csv' WITH (FORMAT csv, HEADER true);
+\copy ab_data FROM 'data/ab_data.csv' WITH (FORMAT csv, HEADER true);

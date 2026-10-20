@@ -1,3 +1,5 @@
+DROP VIEW IF EXISTS ab_clean CASCADE;
+
 CREATE VIEW ab_clean AS
 WITH contaminated AS (
   -- users who saw the wrong page for their group
