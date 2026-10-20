@@ -1,1 +1,110 @@
-# ab-test-landing-page
+# Landing Page A/B Test: SQL + Python Experiment Analysis
+
+**Result:** Recommend keeping the old page. The new page converted 0.14 percentage points *lower* (11.87% vs. 12.02%; 95% CI: −0.38 to +0.09 points, p = 0.23), a difference that is not statistically significant. Even the best case in the confidence interval falls far short of the lift needed to justify a launch.
+
+<img width="1186" height="562" alt="cumulative_conversion" src="https://github.com/user-attachments/assets/1d4293b7-8c2f-4b5a-ace6-a36c3dc5ce6d" />
+
+## Question
+
+An e-commerce company tested a redesigned landing page against its existing page. Does the new page convert visitors into customers at a higher rate, and is the difference large enough to justify launching it?
+
+## Hypothesis and Decision Rule
+
+Set before any analysis was run.
+
+- **H0:** The new page's conversion rate equals the old page's.
+- **H1:** The new page's conversion rate differs from the old page's.
+- **Significance level:** α = 0.05, two-sided
+- **Decision rule:** Ship the new page only if it is significantly better **and** the lift is at least [your threshold, e.g., 0.5 percentage points]. Otherwise, keep the old page.
+
+## Data
+
+- **Source:** [Kaggle "A/B testing" dataset by Luyuan Zhang](https://www.kaggle.com/) [replace with the exact dataset URL]
+- **Columns:** `user_id`, `timestamp`, `group` (control/treatment), `landing_page` (old_page/new_page), `converted` (0/1)
+
+The raw data is not committed to this repo. Download it from the link above and place the CSVs in `data/`.
+
+## Data Cleaning (PostgreSQL)
+
+The raw data had two integrity problems that would bias the result if left in:
+
+1. **Mismatched exposure:** some users were assigned to one group but shown the other group's page.
+2. **Duplicate users:** some users appear more than once.
+
+Every user with a mismatched or cross-group record was removed entirely, since their outcome can't be attributed to either page. For the remaining users, a `ROW_NUMBER()` window function kept only their first exposure. The full logic is in [`sql/03_clean.sql`](sql/03_clean.sql).
+
+
+## Validity Checks
+
+- **Sample ratio:** control had [X] users ([X]%) and treatment had [X] users ([X]%). A chi-square test gave p = 0.84, so there is no evidence the 50/50 split broke.
+- **Daily balance:** both groups received similar traffic on every day of the test ([`sql/04_checks.sql`](sql/04_checks.sql)).
+
+## Results
+
+- **Difference:** −0.14 percentage points (treatment minus control)
+- **Two-proportion z-test:** z = −1.20, p = 0.23
+- **95% confidence interval for the difference:** −0.38 to +0.09 percentage points
+- **Minimum detectable effect:** with this sample size, the test had 80% power to detect a lift of 0.34 percentage points.
+
+![Lift with 95% confidence interval](charts/lift_ci.png)
+
+The confidence interval includes zero, so the data doesn't show a difference between the pages. The test was well powered: it could reliably detect a lift as small as 0.34 points, below the [0.5]-point decision threshold. So this is evidence of no meaningful improvement, not a test too small to tell.
+
+The cumulative conversion chart shows [stable, parallel lines / a novelty effect where treatment started high and declined], so [the result isn't driven by a short-term spike / interpretation].
+
+
+
+## Recommendation
+
+**Keep the old page.** The new page met neither condition of the decision rule: the difference was not significant, and the point estimate was negative. The upper end of the confidence interval (+0.09 points) is well below the [0.5]-point threshold, so launching would add redesign and rollout costs with no realistic prospect of a meaningful conversion gain.
+
+## Limitations
+
+- Conversion is the only metric. Revenue per visitor, bounce rate, and time on page weren't available.
+
+## How to Run
+
+Requirements: PostgreSQL 14+ and Python 3.10+.
+
+```bash
+# 1. Clone and set up Python
+git clone https://github.com/ryanpark123/ab-test-landing-page.git
+cd ab-test-landing-page
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 2. Add your database password
+echo "PG_PASSWORD=your_password" > .env
+
+# 3. Download the dataset into data/, then build the database
+psql -U postgres -d postgres -f sql/01_load.sql
+psql -U postgres -d ab_test -f sql/02_explore.sql
+psql -U postgres -d ab_test -f sql/03_clean.sql
+psql -U postgres -d ab_test -f sql/04_checks.sql
+psql -U postgres -d ab_test -f sql/05_metrics.sql
+
+# 4. Run the analysis
+jupyter notebook notebooks/analysis.ipynb
+```
+
+## Repo Structure
+
+```
+ab-test-landing-page/
+├── sql/
+│   ├── 01_load.sql        # create database and tables, import CSVs
+│   ├── 02_explore.sql     # data-quality checks
+│   ├── 03_clean.sql       # clean view with CTEs and ROW_NUMBER()
+│   ├── 04_checks.sql      # sample ratio and daily balance
+│   └── 05_metrics.sql     # conversion metrics with window functions
+├── notebooks/
+│   └── analysis.ipynb     # statistical tests and charts
+├── charts/                # exported figures
+├── requirements.txt
+└── README.md
+```
+
+## Tools
+
+PostgreSQL (CTEs, window functions, views) · Python (Pandas, SQLAlchemy, SciPy, Statsmodels, Matplotlib) · Jupyter
